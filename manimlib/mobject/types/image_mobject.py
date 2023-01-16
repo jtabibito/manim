@@ -1,50 +1,61 @@
-import numpy as np
+from __future__ import annotations
 
+import numpy as np
 from PIL import Image
 
-from manimlib.constants import *
+from manimlib.constants import DL, DR, UL, UR
 from manimlib.mobject.mobject import Mobject
 from manimlib.utils.bezier import inverse_interpolate
 from manimlib.utils.images import get_full_raster_image_path
 from manimlib.utils.iterables import listify
 
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from typing import Sequence, Tuple
+    from manimlib.typing import Vect3
+
 
 class ImageMobject(Mobject):
-    CONFIG = {
-        "height": 4,
-        "opacity": 1,
-        "shader_folder": "image",
-        "shader_dtype": [
-            ('point', np.float32, (3,)),
-            ('im_coords', np.float32, (2,)),
-            ('opacity', np.float32, (1,)),
-        ]
-    }
+    shader_folder: str = "image"
+    shader_dtype: Sequence[Tuple[str, type, Tuple[int]]] = [
+        ('point', np.float32, (3,)),
+        ('im_coords', np.float32, (2,)),
+        ('opacity', np.float32, (1,)),
+    ]
 
-    def __init__(self, filename, **kwargs):
-        path = get_full_raster_image_path(filename)
-        self.image = Image.open(path)
-        self.texture_paths = {"Texture": path}
-        super().__init__(**kwargs)
+    def __init__(        
+        self,
+        filename: str,
+        height: float = 4.0,
+        **kwargs
+    ):
+        self.height = height
+        self.image_path = get_full_raster_image_path(filename)
+        self.image = Image.open(self.image_path)
+        super().__init__(texture_paths={"Texture": self.image_path}, **kwargs)
 
-    def init_data(self):
+    def init_data(self) -> None:
         self.data = {
             "points": np.array([UL, DL, UR, DR]),
             "im_coords": np.array([(0, 0), (0, 1), (1, 0), (1, 1)]),
             "opacity": np.array([[self.opacity]], dtype=np.float32),
         }
 
-    def init_points(self):
+    def init_points(self) -> None:
         size = self.image.size
         self.set_width(2 * size[0] / size[1], stretch=True)
         self.set_height(self.height)
 
-    def set_opacity(self, opacity, recurse=True):
+    def set_opacity(self, opacity: float, recurse: bool = True):
         for mob in self.get_family(recurse):
             mob.data["opacity"] = np.array([[o] for o in listify(opacity)])
         return self
 
-    def point_to_rgb(self, point):
+    def set_color(self, color, opacity=None, recurse=None):
+        return self
+
+    def point_to_rgb(self, point: Vect3) -> Vect3:
         x0, y0 = self.get_corner(UL)[:2]
         x1, y1 = self.get_corner(DR)[:2]
         x_alpha = inverse_interpolate(x0, x1, point[0])
@@ -60,7 +71,7 @@ class ImageMobject(Mobject):
         ))
         return np.array(rgb) / 255
 
-    def get_shader_data(self):
+    def get_shader_data(self) -> np.ndarray:
         shader_data = super().get_shader_data()
         self.read_data_to_shader(shader_data, "im_coords", "im_coords")
         self.read_data_to_shader(shader_data, "opacity", "opacity")
